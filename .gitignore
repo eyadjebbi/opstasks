@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.npm/
+
+# Docker
+*.log
+
+# Secrets (jamais dans Git !)
+infra/k8s/secret.yaml
