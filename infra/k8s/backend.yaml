@@ -13,6 +13,42 @@ spec:
       labels:
         app: backend
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready \
+                -h "${DATABASE_HOST}" \
+                -p "${DATABASE_PORT}" \
+                -U "${DATABASE_USER}" \
+                -d "${DATABASE_NAME}"; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+          env:
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: opstasks-config
+                  key: DATABASE_HOST
+            - name: DATABASE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: opstasks-config
+                  key: DATABASE_PORT
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: opstasks-secret
+                  key: DATABASE_USER
+            - name: DATABASE_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: opstasks-secret
+                  key: DATABASE_NAME
       containers:
         - name: backend
           image: opstasks-backend:latest
@@ -66,14 +102,23 @@ spec:
             httpGet:
               path: /health/live
               port: 8000
-            initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health/ready
               port: 8000
-            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
 ---
 apiVersion: v1
 kind: Service
@@ -81,6 +126,7 @@ metadata:
   name: backend
   namespace: demo-app
 spec:
+  type: ClusterIP
   selector:
     app: backend
   ports:
