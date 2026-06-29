@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opstasks-config
+  namespace: demo-app
+data:
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  ENABLE_DEMO_FAULTS: "true"
+  LOG_LEVEL: INFO
