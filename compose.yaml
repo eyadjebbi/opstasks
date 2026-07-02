@@ -1,15 +1,15 @@
 services:
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
     environment:
-      POSTGRES_DB: opstasks
-      POSTGRES_USER: opstasks
-      POSTGRES_PASSWORD: opstasks
+      POSTGRES_DB: ${DATABASE_NAME:-opstasks}
+      POSTGRES_USER: ${DATABASE_USER:?Create .env from .env.example}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Create .env from .env.example}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opstasks"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -18,12 +18,12 @@ services:
     build: ./backend
     environment:
       DATABASE_HOST: postgres
-      DATABASE_NAME: opstasks
-      DATABASE_USER: opstasks
-      DATABASE_PASSWORD: opstasks
+      DATABASE_NAME: ${DATABASE_NAME:-opstasks}
+      DATABASE_USER: ${DATABASE_USER:?Create .env from .env.example}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Create .env from .env.example}
       DATABASE_PORT: "5432"
       ENABLE_DEMO_FAULTS: "true"
-      LOG_LEVEL: INFO
+      DEMO_SLOW_DELAY_SECONDS: "3"
     depends_on:
       postgres:
         condition: service_healthy
