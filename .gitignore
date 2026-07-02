@@ -10,6 +10,9 @@ node_modules/
 dist/
 .npm/
 
+# Local AI working notes
+.agent/
+
 # Docker
 *.log
 
