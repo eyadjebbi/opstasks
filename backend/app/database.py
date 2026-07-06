@@ -4,14 +4,18 @@ import os
 from collections.abc import Iterator
 
 from dotenv import load_dotenv
-from sqlalchemy.engine import URL, Engine, create_engine
+from sqlalchemy.engine import URL, Engine, create_engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 load_dotenv()
 
 
 def get_database_url() -> URL:
-    """Build the PostgreSQL connection URL from environment variables."""
+    """Return an explicit URL or build PostgreSQL settings from the environment."""
+
+    configured_url = os.getenv("DATABASE_URL")
+    if configured_url:
+        return make_url(configured_url)
 
     return URL.create(
         drivername="postgresql+psycopg2",
@@ -23,7 +27,11 @@ def get_database_url() -> URL:
     )
 
 
-engine: Engine = create_engine(get_database_url(), pool_pre_ping=True)
+database_url = get_database_url()
+engine_options: dict[str, object] = {"pool_pre_ping": True}
+if database_url.drivername.startswith("sqlite"):
+    engine_options["connect_args"] = {"check_same_thread": False}
+engine: Engine = create_engine(database_url, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

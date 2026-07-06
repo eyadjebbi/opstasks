@@ -57,11 +57,15 @@ opstasks/
   infra/k8s/
     app.yaml           Healthy frontend, backend, PostgreSQL, Services, and PVC
     failing-worker.yaml  Optional CrashLoop scenario
+  infra/localstack/
+    Dockerfile          Combined React and FastAPI image for local ECS
+    task-definition.json  LocalStack ECS task with embedded SQLite storage
   scripts/
     deploy.sh          Build and deploy a healthy Minikube baseline
     fault.sh           Inject one of five faults
     status.sh          Show workloads, storage, Services, and recent events
     recover.sh         Recover every supported fault without deleting data
+    localstack-*.sh    Deploy and test the optional ECR + ECS runtime
   compose.yaml         Local Docker stack
 ```
 
@@ -81,6 +85,13 @@ For the Kubernetes lab:
 - Docker
 - Minikube
 - kubectl
+
+For the optional local AWS runtime:
+
+- LocalStack CLI
+- `awslocal`
+- Docker
+- curl
 
 ## Run the normal application with Docker
 
@@ -301,6 +312,90 @@ curl -i http://localhost:8000/health/ready
 
 Expected: readiness is HTTP 200, PostgreSQL and backend are ready, and no
 failing-worker Deployment remains.
+
+## Optional LocalStack ECR + ECS runtime
+
+This is an alternative to Minikube, not a dependency of the Kubernetes lab.
+LocalStack ECR stores one ECS-specific application image. That image serves the
+built React UI and FastAPI from one process and uses an embedded SQLite file.
+The ordinary Compose and Kubernetes paths continue to use PostgreSQL.
+
+```text
+Docker build -> LocalStack ECR -> LocalStack ECS task
+                                    ├── FastAPI API
+                                    ├── React static files
+                                    └── SQLite file
+```
+
+Start LocalStack. Depending on your LocalStack installation and plan, configure
+its authentication token before starting it:
+
+```bash
+localstack start -d
+```
+
+Build, push, register, and run the application:
+
+```bash
+./scripts/localstack-deploy.sh
+```
+
+The script creates the `opstasks` ECR repository, pushes the combined image,
+creates the `opstasks` ECS cluster, registers a new task-definition revision,
+and creates or updates the ECS service.
+
+Open:
+
+- UI: <http://localhost:8000>
+- API: <http://localhost:8000/docs>
+
+Inspect ECS and ECR state:
+
+```bash
+./scripts/localstack-status.sh
+awslocal ecs list-tasks --cluster opstasks
+awslocal ecr list-images --repository-name opstasks
+```
+
+### LocalStack faults
+
+```bash
+./scripts/localstack-fault.sh degraded
+./scripts/localstack-fault.sh errors
+./scripts/localstack-fault.sh slow
+./scripts/localstack-fault.sh task-stop
+./scripts/localstack-fault.sh service-down
+```
+
+| Mode | ECS behavior |
+| --- | --- |
+| `degraded` | Backend readiness returns HTTP 503 |
+| `errors` | Task API returns HTTP 500 |
+| `slow` | Task API waits about three seconds |
+| `task-stop` | Calls ECS `StopTask`; the service should start a replacement |
+| `service-down` | Sets the ECS service desired count to zero |
+
+Recover any supported LocalStack fault:
+
+```bash
+./scripts/localstack-recover.sh
+./scripts/localstack-status.sh
+```
+
+Recovery clears the application fault and recreates one healthy ECS task. The
+SQLite database uses `/tmp/opstasks-localstack-data` on the Docker host for
+local persistence.
+
+The ECS path intentionally does not pretend to provide Kubernetes semantics:
+
+- It has ECS tasks and services, not Pods, readiness routing, or StatefulSets.
+- `CrashLoopBackOff` remains a Kubernetes-only scenario.
+- PostgreSQL replica scaling and PVC inspection remain Kubernetes-only.
+- SQLite is used only to keep the optional local ECS task self-contained.
+- LocalStack service fidelity and availability depend on your installed plan.
+
+Use Minikube when testing Kubernetes diagnosis. Use LocalStack ECS when testing
+AWS CLI, ECR, ECS task, and ECS service diagnosis.
 
 ## Useful diagnostic commands
 

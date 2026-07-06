@@ -1,0 +1,40 @@
+{
+  "family": "opstasks",
+  "networkMode": "bridge",
+  "containerDefinitions": [
+    {
+      "name": "opstasks",
+      "image": "__APP_IMAGE__",
+      "essential": true,
+      "memoryReservation": 512,
+      "environment": [
+        {"name": "DATABASE_URL", "value": "sqlite:////data/opstasks.db"},
+        {"name": "ENABLE_DEMO_FAULTS", "value": "true"},
+        {"name": "DEMO_SLOW_DELAY_SECONDS", "value": "3"},
+        {"name": "FRONTEND_DIR", "value": "/app/frontend"}
+      ],
+      "mountPoints": [
+        {"sourceVolume": "app-data", "containerPath": "/data"}
+      ],
+      "portMappings": [
+        {"containerPort": 8000, "hostPort": 8000, "protocol": "tcp"}
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health/ready\")'"
+        ],
+        "interval": 10,
+        "timeout": 3,
+        "retries": 3,
+        "startPeriod": 5
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "app-data",
+      "host": {"sourcePath": "/tmp/opstasks-localstack-data"}
+    }
+  ]
+}
