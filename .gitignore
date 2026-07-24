@@ -10,8 +10,14 @@ node_modules/
 dist/
 .npm/
 
+# Local AI working notes
+.agent/
+
 # Docker
 *.log
 
 # Secrets (jamais dans Git !)
 infra/k8s/secret.yaml
+
+# vscode
+.vscode/
