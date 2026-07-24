@@ -2,7 +2,7 @@
 
 import pytest
 
-from app import database
+from app import database, main
 
 
 class RecordingSession:
@@ -63,3 +63,47 @@ def test_successful_request_closes_without_rollback(
 
     assert session.rolled_back is False
     assert session.closed is True
+
+
+def test_database_initialization_retries_transient_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Startup survives temporary DNS or PostgreSQL failures."""
+
+    attempts = 0
+    delays: list[float] = []
+
+    def create_schema(*, bind: object) -> None:
+        nonlocal attempts
+        assert bind is main.engine
+        attempts += 1
+        if attempts < 3:
+            raise ConnectionError("temporary DNS failure")
+
+    monkeypatch.setenv("DATABASE_STARTUP_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("DATABASE_STARTUP_RETRY_SECONDS", "0.25")
+    monkeypatch.setattr(main.Base.metadata, "create_all", create_schema)
+    monkeypatch.setattr(main.time, "sleep", delays.append)
+
+    main.initialize_database()
+
+    assert attempts == 3
+    assert delays == [0.25, 0.25]
+
+
+def test_database_initialization_raises_after_retry_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A persistent database failure eventually stops application startup."""
+
+    def create_schema(*, bind: object) -> None:
+        assert bind is main.engine
+        raise ConnectionError("database unavailable")
+
+    monkeypatch.setenv("DATABASE_STARTUP_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("DATABASE_STARTUP_RETRY_SECONDS", "0")
+    monkeypatch.setattr(main.Base.metadata, "create_all", create_schema)
+    monkeypatch.setattr(main.time, "sleep", lambda _delay: None)
+
+    with pytest.raises(ConnectionError, match="database unavailable"):
+        main.initialize_database()

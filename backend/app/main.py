@@ -1,6 +1,8 @@
 """FastAPI entry point for the task and fault-testing service."""
 
 import logging
+import os
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,11 +18,39 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("opstasks")
 
 
+def initialize_database() -> None:
+    """Create the schema, retrying while PostgreSQL or cluster DNS starts."""
+
+    attempts = int(os.getenv("DATABASE_STARTUP_MAX_ATTEMPTS", "30"))
+    delay_seconds = float(os.getenv("DATABASE_STARTUP_RETRY_SECONDS", "2"))
+
+    for attempt in range(1, attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            return
+        except Exception as exception:
+            if attempt == attempts:
+                logger.exception(
+                    "Database initialization failed after %s attempts",
+                    attempts,
+                )
+                raise
+            logger.warning(
+                "Database unavailable during startup (%s); retrying in %s seconds "
+                "[attempt %s/%s]",
+                type(exception).__name__,
+                delay_seconds,
+                attempt,
+                attempts,
+            )
+            time.sleep(delay_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Create the fixed demo schema and close connections on shutdown."""
 
-    Base.metadata.create_all(bind=engine)
+    initialize_database()
     logger.info("OpsTasks backend ready")
     try:
         yield
