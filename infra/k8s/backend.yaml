@@ -13,6 +13,23 @@ spec:
       labels:
         app: backend
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: opstasks-backend:1.0.0
+          imagePullPolicy: Never
+          command:
+            - python
+            - -c
+            - |
+              import socket
+              import time
+
+              while True:
+                  try:
+                      with socket.create_connection(("postgres", 5432), timeout=2):
+                          break
+                  except OSError:
+                      time.sleep(2)
       containers:
         - name: backend
           image: opstasks-backend:1.0.0
@@ -40,6 +57,16 @@ spec:
               value: "true"
             - name: DEMO_SLOW_DELAY_SECONDS
               value: "3"
+            - name: DATABASE_STARTUP_MAX_ATTEMPTS
+              value: "30"
+            - name: DATABASE_STARTUP_RETRY_SECONDS
+              value: "2"
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 2
+            failureThreshold: 45
           livenessProbe:
             httpGet:
               path: /health/live
