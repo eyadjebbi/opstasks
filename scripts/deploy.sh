@@ -12,7 +12,7 @@ minikube status >/dev/null 2>&1 || minikube start
 minikube image build -t opstasks-backend:1.0.0 "${ROOT_DIR}/backend"
 minikube image build -t opstasks-frontend:1.0.0 "${ROOT_DIR}/frontend"
 
-kubectl apply -f "${ROOT_DIR}/infra/k8s/app.yaml"
+kubectl apply -k "${ROOT_DIR}/infra/k8s"
 kubectl delete deployment failing-worker -n "${NAMESPACE}" --ignore-not-found
 kubectl rollout restart deployment/backend deployment/frontend -n "${NAMESPACE}"
 kubectl rollout status statefulset/postgres -n "${NAMESPACE}" --timeout=180s

@@ -55,7 +55,11 @@ opstasks/
     nginx.conf         Static files plus /api and /health proxy
     Dockerfile
   infra/k8s/
-    app.yaml           Healthy frontend, backend, PostgreSQL, Services, and PVC
+    kustomization.yaml   Healthy application manifest entry point
+    namespace.yaml       Namespace and demo credentials
+    postgres.yaml        PostgreSQL Services, storage, and StatefulSet
+    backend.yaml         FastAPI Deployment and Service
+    frontend.yaml        Nginx Deployment and Service
     failing-worker.yaml  Optional CrashLoop scenario
   infra/localstack/
     Dockerfile          Combined React and FastAPI image for local ECS
@@ -449,7 +453,7 @@ Basic configuration checks from the repository root:
 ```bash
 docker compose config
 bash -n scripts/*.sh
-kubectl apply --dry-run=client -f infra/k8s/app.yaml
+kubectl apply --dry-run=client -k infra/k8s
 kubectl apply --dry-run=client -f infra/k8s/failing-worker.yaml
 ```
 
@@ -463,7 +467,7 @@ Compose reads `.env`:
 | `DATABASE_USER` | `opstasks` | Local database user |
 | `DATABASE_PASSWORD` | `opstasks` | Local database password |
 
-Kubernetes uses the same visible demo credentials directly in `app.yaml`.
+Kubernetes uses the same visible demo credentials directly in `namespace.yaml`.
 Application faults are enabled only by the Compose and Kubernetes environment.
 The backend default is disabled.
 
