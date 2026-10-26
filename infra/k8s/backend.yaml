@@ -15,67 +15,34 @@ spec:
     spec:
       initContainers:
         - name: wait-for-postgres
-          image: postgres:15-alpine
+          image: opstasks-backend:1.0.0
+          imagePullPolicy: Never
           command:
-            - sh
+            - python
             - -c
             - |
-              until pg_isready \
-                -h "${DATABASE_HOST}" \
-                -p "${DATABASE_PORT}" \
-                -U "${DATABASE_USER}" \
-                -d "${DATABASE_NAME}"; do
-                echo "Waiting for PostgreSQL..."
-                sleep 2
-              done
-          env:
-            - name: DATABASE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: DATABASE_HOST
-            - name: DATABASE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: DATABASE_PORT
-            - name: DATABASE_USER
-              valueFrom:
-                secretKeyRef:
-                  name: opstasks-secret
-                  key: DATABASE_USER
-            - name: DATABASE_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: opstasks-secret
-                  key: DATABASE_NAME
+              import socket
+              import time
+
+              while True:
+                  try:
+                      with socket.create_connection(("postgres", 5432), timeout=2):
+                          break
+                  except OSError:
+                      time.sleep(2)
       containers:
         - name: backend
-          image: opstasks-backend:latest
+          image: opstasks-backend:1.0.0
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
           env:
             - name: DATABASE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: DATABASE_HOST
+              value: postgres
+            - name: DATABASE_NAME
+              value: opstasks
             - name: DATABASE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: DATABASE_PORT
-            - name: ENABLE_DEMO_FAULTS
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: ENABLE_DEMO_FAULTS
-            - name: LOG_LEVEL
-              valueFrom:
-                configMapKeyRef:
-                  name: opstasks-config
-                  key: LOG_LEVEL
+              value: "5432"
             - name: DATABASE_USER
               valueFrom:
                 secretKeyRef:
@@ -86,39 +53,30 @@ spec:
                 secretKeyRef:
                   name: opstasks-secret
                   key: DATABASE_PASSWORD
-            - name: DATABASE_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: opstasks-secret
-                  key: DATABASE_NAME
-          resources:
-            requests:
-              cpu: 50m
-              memory: 96Mi
-            limits:
-              cpu: 250m
-              memory: 256Mi
-          livenessProbe:
-            httpGet:
-              path: /health/live
-              port: 8000
-            periodSeconds: 10
-            timeoutSeconds: 2
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: 8000
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
+            - name: ENABLE_DEMO_FAULTS
+              value: "true"
+            - name: DEMO_SLOW_DELAY_SECONDS
+              value: "3"
+            - name: DATABASE_STARTUP_MAX_ATTEMPTS
+              value: "30"
+            - name: DATABASE_STARTUP_RETRY_SECONDS
+              value: "2"
           startupProbe:
             httpGet:
               path: /health/live
               port: 8000
             periodSeconds: 2
-            timeoutSeconds: 2
-            failureThreshold: 30
+            failureThreshold: 45
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8000
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            periodSeconds: 5
 ---
 apiVersion: v1
 kind: Service
@@ -126,9 +84,7 @@ metadata:
   name: backend
   namespace: demo-app
 spec:
-  type: ClusterIP
   selector:
     app: backend
   ports:
     - port: 8000
-      targetPort: 8000
